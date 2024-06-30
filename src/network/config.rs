@@ -1,0 +1,1 @@
+pub const INTERFACE_NAME: &str = "enp7s0";
