@@ -2,6 +2,16 @@ from scapy.all import Ether, IP, UDP, BOOTP, DHCP, RandMAC, sendp, sniff
 import requests
 import random
 import os
+import subprocess
+
+def configure_interface(interface, ip, gateway):
+    # Set the IP address on the interface
+    subprocess.run(['sudo', 'ip', 'addr', 'flush', 'dev', interface])
+    subprocess.run(['sudo', 'ip', 'addr', 'add', f'{ip}/24', 'dev', interface])
+    subprocess.run(['sudo', 'ip', 'link', 'set', interface, 'up'])
+
+    # Set the default gateway
+    subprocess.run(['sudo', 'ip', 'route', 'add', 'default', 'via', gateway])
 
 def send_dhcp_discover(interface, client_mac, transaction_id):
     chaddr = bytes.fromhex(client_mac.replace(":", ""))
@@ -38,6 +48,26 @@ def handle_dhcp_response(packet, client_mac, transaction_id, interface):
                 print(f"Received DHCP OFFER: Offered IP = {offered_ip}, Gateway IP = {gateway_ip}")
                 send_dhcp_request(interface, client_mac, transaction_id, offered_ip, gateway_ip)
                 return gateway_ip
+        elif dhcp_type == 5:  # DHCP ACK
+            if packet[Ether].dst != client_mac:
+                print(f"Ignoring packet, it is not for our client MAC: {packet[Ether].dst}")
+                return None
+
+            if packet[BOOTP].xid != transaction_id:
+                print(f"Ignoring packet, transaction ID does not match: {packet[BOOTP].xid}")
+                return None
+
+            assigned_ip = packet[BOOTP].yiaddr
+            gateway_ip = None
+            for option in packet[DHCP].options:
+                if option[0] == "router":
+                    gateway_ip = option[1]
+
+            if assigned_ip and gateway_ip:
+                print(f"Received DHCP ACK: Assigned IP = {assigned_ip}, Gateway IP = {gateway_ip}")
+                configure_interface(interface, assigned_ip, gateway_ip)
+                make_http_request(gateway_ip)
+                return gateway_ip
         else:
             print(f"Received DHCP packet of type {dhcp_type}")
     else:
@@ -58,7 +88,6 @@ def send_dhcp_request(interface, client_mac, transaction_id, offered_ip, gateway
             "end"
         ])
     )
-
 
     print(f"Sending DHCP REQUEST for IP: {offered_ip}")
     sendp(dhcp_request, iface=interface, verbose=True)
@@ -94,4 +123,3 @@ if __name__ == "__main__":
 
     # Sniff for DHCP responses and handle them
     sniff_dhcp(interface, client_mac, transaction_id)
-
