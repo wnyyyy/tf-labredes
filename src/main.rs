@@ -1,7 +1,5 @@
-extern crate pnet;
-
-use tf::network;
+use tf::network::dhcp_server::run;
 
 fn main() {
-    network::dhcp_server::run();
+    run();
 }
