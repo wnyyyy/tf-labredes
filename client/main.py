@@ -23,7 +23,6 @@ def create_dhcp_discover():
     dhcp_discover += b'\x00' * 128  # Boot file name not given
     dhcp_discover += b'\x63\x82\x53\x63'  # Magic cookie: DHCP
     dhcp_discover += b'\x35\x01\x01'  # Option: (53) DHCP Message Type (Discover)
-    dhcp_discover += b'\x37\x01\x03'  # Option: (55) Parameter Request List
     dhcp_discover += b'\xff'  # End Option
 
     return dhcp_discover

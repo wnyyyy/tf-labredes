@@ -58,7 +58,7 @@ fn send_dhcp_offer(sender: &mut dyn DataLinkSender, transaction_id: u32, client_
     let options = vec![
         DhcpOption::DhcpMsgType(DhcpMessageType::Offer),
         DhcpOption::SubnetMask([255, 255, 255, 0]),
-        DhcpOption::Router([192, 168, 1, 1]),
+        DhcpOption::Router(SERVER_IP.octets()),
         DhcpOption::DomainNameServer(vec![DNS_SERVERS[0].octets(), DNS_SERVERS[1].octets()]),
         DhcpOption::IPAddressLeaseTime(LEASE_DURATION as u32),
         DhcpOption::ServerIdentifier(SERVER_IP.octets()),
@@ -119,7 +119,7 @@ fn send_dhcp_ack(sender: &mut dyn DataLinkSender, transaction_id: u32, client_ad
     let options = vec![
         DhcpOption::DhcpMsgType(DhcpMessageType::Acknowledgement),
         DhcpOption::SubnetMask([255, 255, 255, 0]), 
-        DhcpOption::Router([192, 168, 1, 1]),
+        DhcpOption::Router(SERVER_IP.octets()),
         DhcpOption::DomainNameServer(vec![DNS_SERVERS[0].octets(), DNS_SERVERS[1].octets()]),
         DhcpOption::IPAddressLeaseTime(LEASE_DURATION as u32),
         DhcpOption::ServerIdentifier(SERVER_IP.octets()),
@@ -149,8 +149,8 @@ fn send_dhcp_ack(sender: &mut dyn DataLinkSender, transaction_id: u32, client_ad
 
     let mut ethernet_packet = build_ethernet_frame(&mut buffer, MacAddr::from(SERVER_MAC_ADDRESS), client_mac);
 
-    let source = Ipv4Addr::new(0, 0, 0, 0); // DHCP server IP could be 0.0.0.0 or SERVER_IP based on your network configuration
-    let destination = BROADCAST_IP; // Usually the broadcast address, unless a unicast option is negotiated
+    let source = Ipv4Addr::new(0, 0, 0, 0);
+    let destination = BROADCAST_IP;
     let mut ipv4_packet = build_ipv4_packet(ethernet_packet.payload_mut(), source, destination, payload_len);
 
     let mut udp_packet = build_udp_packet(ipv4_packet.payload_mut(), 67, 68, dhcp_message_size + 8);
