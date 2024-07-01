@@ -8,6 +8,6 @@ pub const LEASE_DURATION: u64 = 3600;
 pub const STARTING_CLIENT_IP: Ipv4Addr = Ipv4Addr::new(192, 168, 1, 110);
 
 pub const DNS_SERVERS: [Ipv4Addr; 2] = [
-    Ipv4Addr::new(192, 168, 1, 1),
+    Ipv4Addr::new(192, 168, 109, 1),
     Ipv4Addr::new(8, 8, 8, 8)
 ];
