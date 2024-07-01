@@ -1,4 +1,5 @@
 use std::net::Ipv4Addr;
+use std::thread::sleep;
 use pnet::datalink::{DataLinkSender, MacAddr};
 use pnet::packet::ethernet::{EtherTypes, MutableEthernetPacket};
 use pnet::packet::udp::{MutableUdpPacket, UdpPacket};
@@ -18,7 +19,8 @@ pub fn handle_dhcp_packet(sender: &mut dyn DataLinkSender, udp: &UdpPacket, stat
             match message_type {
                 Some(DhcpMessageType::Discover) => {
                     let client_mac = MacAddr::new(message.chaddr[0], message.chaddr[1], message.chaddr[2], message.chaddr[3], message.chaddr[4], message.chaddr[5]);
-                    println!("DHCP DISCOVER recebido! MAC: {}", client_mac);
+                    println!("DHCP DISCOVER recebido! MAC: {}, xID: {}", client_mac, message.xid);
+                    sleep(std::time::Duration::from_secs(1));
                     send_dhcp_offer(sender, message.xid, client_mac, state);
                     println!("DHCP OFFER enviado!");
                 },

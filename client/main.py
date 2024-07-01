@@ -1,41 +1,97 @@
-import socket
-import struct
+from scapy.all import Ether, IP, UDP, BOOTP, DHCP, RandMAC, sendp, sniff
+import requests
 import random
+import os
 
-def create_dhcp_discover():
-    transaction_id = random.randint(0, 0xFFFFFFFF)
-    mac_address = b'\xDE\xAD\xBE\xEF\x00\x01'  # Exemplo de MAC Address
+def send_dhcp_discover(interface, client_mac, transaction_id):
+    chaddr = bytes.fromhex(client_mac.replace(":", ""))
+    dhcp_discover = (
+        Ether(dst="ff:ff:ff:ff:ff:ff", src=client_mac) /
+        IP(src="0.0.0.0", dst="255.255.255.255") /
+        UDP(sport=68, dport=67) /
+        BOOTP(chaddr=chaddr, xid=transaction_id) /
+        DHCP(options=[("message-type", 1), "end"])
+    )
 
-    dhcp_discover = b''
-    dhcp_discover += b'\x01'  # Message type: Boot Request (1)
-    dhcp_discover += b'\x01'  # Hardware type: Ethernet
-    dhcp_discover += b'\x06'  # Hardware address length: 6
-    dhcp_discover += b'\x00'  # Hops: 0
-    dhcp_discover += struct.pack('>I', transaction_id)  # Transaction ID
-    dhcp_discover += b'\x00\x00'  # Seconds elapsed: 0
-    dhcp_discover += b'\x80\x00'  # Bootp flags: 0x8000 (Broadcast) + reserved flags
-    dhcp_discover += b'\x00\x00\x00\x00'  # Client IP address: 0.0.0.0
-    dhcp_discover += b'\x00\x00\x00\x00'  # Your (client) IP address: 0.0.0.0
-    dhcp_discover += b'\x00\x00\x00\x00'  # Next server IP address: 0.0.0.0
-    dhcp_discover += b'\x00\x00\x00\x00'  # Relay agent IP address: 0.0.0.0
-    dhcp_discover += mac_address + b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'  # Client MAC address + padding
-    dhcp_discover += b'\x00' * 64  # Server host name not given
-    dhcp_discover += b'\x00' * 128  # Boot file name not given
-    dhcp_discover += b'\x63\x82\x53\x63'  # Magic cookie: DHCP
-    dhcp_discover += b'\x35\x01\x01'  # Option: (53) DHCP Message Type (Discover)
-    dhcp_discover += b'\xff'  # End Option
+    print(f"Sending DHCP DISCOVER from MAC: {client_mac}")
+    sendp(dhcp_discover, iface=interface, verbose=True)
 
-    return dhcp_discover
+def handle_dhcp_response(packet, client_mac, transaction_id, interface):
+    if DHCP in packet:
+        dhcp_type = packet[DHCP].options[0][1]
+        if dhcp_type == 2:  # DHCP Offer
+            if packet[Ether].dst != client_mac:
+                print(f"Ignoring packet, it is not for our client MAC: {packet[Ether].dst}")
+                return None
 
-def send_dhcp_packet(packet):
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-    sock.sendto(packet, ('<broadcast>', 67))
+            if packet[BOOTP].xid != transaction_id:
+                print(f"Ignoring packet, transaction ID does not match: {packet[BOOTP].xid}")
+                return None
 
-def main():
-    dhcp_discover_packet = create_dhcp_discover()
-    send_dhcp_packet(dhcp_discover_packet)
-    print("DHCP Discover packet sent to port 67.")
+            offered_ip = packet[BOOTP].yiaddr
+            gateway_ip = None
+            for option in packet[DHCP].options:
+                if option[0] == "router":
+                    gateway_ip = option[1]
+
+            if gateway_ip:
+                print(f"Received DHCP OFFER: Offered IP = {offered_ip}, Gateway IP = {gateway_ip}")
+                send_dhcp_request(interface, client_mac, transaction_id, offered_ip, gateway_ip)
+                return gateway_ip
+        else:
+            print(f"Received DHCP packet of type {dhcp_type}")
+    else:
+        print("Received non-DHCP packet")
+
+def send_dhcp_request(interface, client_mac, transaction_id, offered_ip, gateway_ip):
+    chaddr = bytes.fromhex(client_mac.replace(":", ""))
+    dhcp_request = (
+        Ether(src=client_mac, dst="ff:ff:ff:ff:ff:ff") /
+        IP(src="0.0.0.0", dst="255.255.255.255") /
+        UDP(sport=68, dport=67) /
+        BOOTP(chaddr=chaddr, xid=transaction_id) /
+        DHCP(options=[
+            ("message-type", 3),  # DHCP REQUEST
+            ("requested_addr", offered_ip),
+            ("server_id", gateway_ip),
+            ("param_req_list", [1, 3, 6, 15, 31, 33, 43, 119, 121, 252, 255]),
+            "end"
+        ])
+    )
+
+
+    print(f"Sending DHCP REQUEST for IP: {offered_ip}")
+    sendp(dhcp_request, iface=interface, verbose=True)
+
+def sniff_dhcp(interface, client_mac, transaction_id):
+    def custom_action(packet):
+        handle_dhcp_response(packet, client_mac, transaction_id, interface)
+
+    print(f"Starting packet sniffing on interface: {interface}, MAC: {client_mac}")
+    sniff(filter="udp and (port 67 or port 68)", prn=custom_action, iface=interface, store=0)
+
+def make_http_request(gateway_ip):
+    os.environ['http_proxy'] = f'http://{gateway_ip}:80'
+    os.environ['https_proxy'] = f'http://{gateway_ip}:80'
+    
+    try:
+        response = requests.get('http://example.com')
+        print(f"Response from example.com: {response.status_code}")
+        print(response.text)
+    except requests.exceptions.RequestException as e:
+        print(f"HTTP request failed: {e}")
 
 if __name__ == "__main__":
-    main()
+    interface = "veth1"  # Replace with your virtual interface
+    client_mac = str(RandMAC())  # Generate a consistent random MAC address
+    transaction_id = random.randint(0, 0xFFFFFFFF)  # Generate a random transaction ID
+
+    print(f"Generated consistent MAC address: {client_mac}")
+    print(f"Generated transaction ID: {transaction_id}")
+
+    # Send DHCP Discover
+    send_dhcp_discover(interface, client_mac, transaction_id)
+
+    # Sniff for DHCP responses and handle them
+    sniff_dhcp(interface, client_mac, transaction_id)
+
