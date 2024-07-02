@@ -9,15 +9,15 @@ class CustomDNSResolver:
         reply = request.reply()
         qname = request.q.qname
         qtype = QTYPE[request.q.qtype]
-        logging.info(f'Received DNS request for: {qname}')
+        logging.info(f'Pedido DNS recebido para: {qname}')
         
-        # Custom DNS resolution logic
-        if qname.matchGlob("example.com."):
+        # Logica de DNS custom
+        if qname.matchGlob("example2.com."):
             reply.add_answer(RR(qname, QTYPE.A, rdata=A("142.250.189.174")))
-            logging.info(f'Responding with IP: 142.250.189.174 for {qname}')
+            logging.info(f'Respondendo com o IP: 142.250.189.174 for {qname}')
         else:
             reply.header.rcode = getattr(DNSHeader.RCODE, "NXDOMAIN")
-            logging.info(f'No matching domain found for: {qname}')
+            logging.info(f'Nenhum domínio encontrado para: {qname}')
         
         return reply
 
@@ -25,12 +25,12 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     resolver = CustomDNSResolver()
     dns_server = DNSServer(resolver, port=53, address=DEFAULT_GATEWAY_IP)
-    logging.info("Starting custom DNS server on port 53")
+    logging.info("Iniciando servidor de DNS custom na porta 53")
     dns_server.start_thread()
 
     try:
         while True:
             pass
     except KeyboardInterrupt:
-        logging.info("Stopping DNS server")
+        logging.info("Parando servidor DNS")
         dns_server.stop()

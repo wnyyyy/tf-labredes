@@ -7,30 +7,29 @@ DEFAULT_GATEWAY_IP = '192.168.109.1'
 
 class ProxyHTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
-        # Parse the original request URL
         original_url = self.path
-        logging.info(f'Received request for URL: {original_url}')
+        logging.info(f'Pedido recebido para a URL: {original_url}')
         
-        # Replace example.com with google.com
+        # Substitui example.com com google.com
         if 'example.com' in original_url:
             redirect_url = original_url.replace('example.com', 'google.com')
-            logging.info(f'Redirecting URL from {original_url} to {redirect_url}')
+            logging.info(f'Redirecionando a URL de {original_url} para {redirect_url}')
         else:
             redirect_url = original_url
         
-        # Forward the request to the new URL
+        # Redireciona o pedido para a nova URL
         try:
             response = requests.get(redirect_url)
-            logging.info(f'Forwarded request to {redirect_url}, received response with status code: {response.status_code}')
+            logging.info(f'Pedido redirecionado para {redirect_url}, resposta recebida com status code: {response.status_code}')
             
-            # Send response back to the client
+            # Envia resposta de volta para o cliente
             self.send_response(response.status_code)
             for header, value in response.headers.items():
                 self.send_header(header, value)
             self.end_headers()
             self.wfile.write(response.content)
         except Exception as e:
-            logging.error(f'Error forwarding request: {e}')
+            logging.error(f'Erro redirecionando pedido: {e}')
             self.send_response(500)
             self.end_headers()
             self.wfile.write(b'Internal Server Error')
@@ -39,7 +38,7 @@ def run_server(server_class=HTTPServer, handler_class=ProxyHTTPRequestHandler, p
     logging.basicConfig(level=logging.INFO)
     server_address = (DEFAULT_GATEWAY_IP, port)
     httpd = server_class(server_address, handler_class)
-    logging.info(f'Starting proxy server on {DEFAULT_GATEWAY_IP}:{port}')
+    logging.info(f'Iniciando servidor proxy emS {DEFAULT_GATEWAY_IP}:{port}')
     httpd.serve_forever()
 
 if __name__ == '__main__':
